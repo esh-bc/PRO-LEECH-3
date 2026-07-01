@@ -6,10 +6,10 @@
 
 # REQUIRED
 BOT_TOKEN = "8814566386:AAG-4b8LwhWzzlqBm_0zuxfvPL1I4wVRKYA"
-OWNER_ID = 0
-TELEGRAM_API = 0
-TELEGRAM_HASH = ""
-DATABASE_URL = ""  # mongodb:// or mongodb+srv:// URI
+OWNER_ID = 8264404281
+TELEGRAM_API = 30439917
+TELEGRAM_HASH = "4f408081dbb976a9943ada5b551288b7"
+DATABASE_URL = "mongodb+srv://singhyashraj:leechbotxesh@cluster0.i1ruod.mongodb.net/?appName=Cluster0"  # mongodb:// or mongodb+srv:// URI
 
 # General
 DEFAULT_LANG = "en"
@@ -35,7 +35,7 @@ EXCLUDED_EXTENSIONS = ""
 # Bot behavior
 BOT_PM = False
 SET_COMMANDS = True
-SHOW_EXTRA_CMDS = False
+SHOW_EXTRA_CMDS = True
 SAFE_MODE = False
 STRICT_AUTH_MODE = False
 STRICT_FILE_MODE = False
@@ -110,7 +110,7 @@ MIRROR_LOG_ID = ""
 
 # Telegraph
 AUTHOR_NAME = "ESH 0_o"
-AUTHOR_URL = "t.me/iam_esh"
+AUTHOR_URL = "https://t.me/iam_esh"
 
 # Hyper TG (helper bot tokens, comma-separated)
 HELPER_TOKENS = ""
