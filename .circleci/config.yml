@@ -1,0 +1,53 @@
+version: 2.1
+
+parameters:
+  run-schedule:
+    type: boolean
+    default: false
+
+jobs:
+  run-bot:
+    machine:
+      image: ubuntu-2204:current
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - checkout
+
+      - run:
+          name: Copy Config
+          command: cp config_sample.py config.py
+
+      - run:
+          name: Build Docker Image
+          command: docker build -t neo-wzml .
+
+      - run:
+          name: Keep Alive & Run NEO-WZML Bot
+          no_output_timeout: 55m
+          command: |
+            (while true; do echo "[KEEP-ALIVE] $(date)"; sleep 240; done) &
+            docker run --rm \
+              -e PYTHONUNBUFFERED=1 \
+              neo-wzml 2>&1 | tee bot.log
+
+workflows:
+  on-push:
+    when:
+      equal: [ false, << pipeline.parameters.run-schedule >> ]
+    jobs:
+      - run-bot
+
+  keep-alive:
+    when:
+      equal: [ true, << pipeline.parameters.run-schedule >> ]
+    triggers:
+      - schedule:
+          cron: "*/50 * * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - run-bot
