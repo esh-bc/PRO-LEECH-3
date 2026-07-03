@@ -5,10 +5,21 @@ parameters:
     type: boolean
     default: false
 
+schedules:
+  - name: bot-keep-alive
+    cron: "*/50 * * * *"
+    filters:
+      branches:
+        only:
+          - master
+    pipeline-parameters:
+      run-schedule: true
+
 jobs:
   run-bot:
     machine:
       image: ubuntu-2204:current
+    resource_class: large
     environment:
       PYTHONUNBUFFERED: "1"
       DOCKER_BUILDKIT: "1"
@@ -42,12 +53,5 @@ workflows:
   keep-alive:
     when:
       equal: [ true, << pipeline.parameters.run-schedule >> ]
-    triggers:
-      - schedule:
-          cron: "*/50 * * * *"
-          filters:
-            branches:
-              only:
-                - master
     jobs:
       - run-bot
