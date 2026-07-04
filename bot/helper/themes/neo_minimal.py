@@ -12,7 +12,7 @@ class NeoStyle:
 
     ST_BOTPM = """<i>Now, This bot will send all your files and links here. Start Using 0_o ...</i>"""
 
-    ST_UNAUTH = """<i>Now, This bot will send all your files and links here. Start Using 0_o ..."""
+    ST_UNAUTH = """<i>Shhhh u don't have verified yet →⁠_⁠→ verify to use me 0_o ..."""
 
     OWN_TOKEN_GENERATE = """<b>Temporary Token is not yours!</b>\n\n<i>Kindly generate your own :⁠-⁠(.</i>"""
 
