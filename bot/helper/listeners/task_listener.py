@@ -962,8 +962,8 @@ class TaskListener(TaskConfig):
             return error[:200] + "..."
         return error
 
-           async def on_upload_error(self, error):
-            task_failed_photo = choice(glob("bot/images/task_failed/*"))
+    async def on_upload_error(self, error):
+        task_failed_photo = choice(glob("bot/images/task_failed/*"))
         async with task_dict_lock:
             if self.mid in task_dict:
                 del task_dict[self.mid]
