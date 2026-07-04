@@ -962,7 +962,8 @@ class TaskListener(TaskConfig):
             return error[:200] + "..."
         return error
 
-    async def on_upload_error(self, error):
+        async def on_upload_error(self, error):
+        task_failed_photo = choice(glob("bot/images/task_failed/*"))
         async with task_dict_lock:
             if self.mid in task_dict:
                 del task_dict[self.mid]
@@ -979,7 +980,7 @@ class TaskListener(TaskConfig):
 • <b>Due To:</b> {escape(friendly_error)}
 • <b>Mode:</b> {self.mode[0]} - {self.mode[1]}
 • <b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}"""
-        await send_message(self.message, msg)
+            await send_message(self.message, msg, photo=task_failed_photo)
         if count == 0:
             await self.clean()
         else:
