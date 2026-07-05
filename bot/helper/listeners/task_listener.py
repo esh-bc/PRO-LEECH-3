@@ -800,7 +800,7 @@ class TaskListener(TaskConfig):
 
         await start_from_queued()
 
-            return
+            #return
 
 
         await clean_download(self.dir)
