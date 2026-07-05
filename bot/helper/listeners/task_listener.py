@@ -800,9 +800,172 @@ class TaskListener(TaskConfig):
 
         await start_from_queued()
 
-    async def on_download_error(self, error, button=None, is_limit=False):
-        task_failed_photo = choice(glob("bot/images/task_failed/*"))
-        await self.remove_processing()
+    async def on_upload_complete(
+        self, link, files, folders, mime_type, rclone_path="", dir_id=""
+    ):
+        task_done_photo = choice(glob("bot/images/task_done/*"))
+        if (
+            self.is_super_chat
+            and Config.INCOMPLETE_TASK_NOTIFIER
+            and Config.DATABASE_URL
+        ):
+            await database.rm_complete_task(self.message.link)
+        msg = BotTheme("NAME", Name=escape(self.name))
+        msg += BotTheme("SIZE", Size=get_readable_file_size(self.size))
+        try:
+            elapsed = time() - self.message.date.timestamp()
+        except AttributeError:
+            elapsed = 0
+        msg += BotTheme("ELAPSE", Time=get_readable_time(elapsed))
+        msg += BotTheme("MODE", Mode=f"{self.mode[0]} - {self.mode[1]}")
+        LOGGER.info(f"Task Done: {self.name}")
+        if self.is_leech:
+            msg += BotTheme("L_TOTAL_FILES", Files=folders)
+            if mime_type != 0:
+                msg += BotTheme("L_CORRUPTED_FILES", Corrupt=mime_type)
+            msg += BotTheme("L_CC", Tag=self.tag)
+
+            if not files and not self.is_super_chat:
+                await send_message(self.message, msg, photo=task_done_photo)
+            else:
+                msg += "✦ <b><u>Files List :</u></b>\n"
+                fmsg = ""
+                for index, (link, name) in enumerate(files.items(), start=1):
+                    chat_id, msg_id = link.split("/")[-2:]
+                    fmsg += f"{index}. <a href='{link}'>{name}</a>"
+                    fmsg += "\n"
+                    if len(fmsg.encode() + msg.encode()) > 4000:
+                        if not (self.bot_pm and self.is_super_chat):
+                            await send_message(self.user_id, msg + fmsg, photo=task_done_photo)
+                        if self.is_super_chat:
+                            group_msg = msg + fmsg
+                            if self.bot_pm:
+                                group_msg = group_msg.replace("✦ <b><u>Files List :</u></b>\n", "✦ <b><u>Action Performed :</u></b>\n➜ <i>File(s) have been Sent to Bot PM (Private)</i>\n\n✦ <b><u>Files List :</u></b>\n")
+                            await send_message(self.message, group_msg, photo=task_done_photo)
+                        await sleep(1)
+                        fmsg = ""
+                if fmsg != "":
+                    if not (self.bot_pm and self.is_super_chat):
+                        await send_message(self.user_id, msg + fmsg, photo=task_done_photo)
+                    if self.is_super_chat:
+                        group_msg = msg + fmsg
+                        if self.bot_pm:
+                            group_msg = group_msg.replace("✦ <b><u>Files List :</u></b>\n", "✦ <b><u>Action Performed :</u></b>\n➜ <i>File(s) have been Sent to Bot PM (Private)</i>\n\n✦ <b><u>Files List :</u></b>\n")
+                        await send_message(self.message, group_msg, photo=task_done_photo)
+        else:
+            msg += BotTheme("M_TYPE", Mimetype=mime_type)
+            if mime_type == "Folder":
+                msg += BotTheme("M_SUBFOLD", Folder=folders)
+                msg += BotTheme("TOTAL_FILES", Files=files)
+
+            multi_link_msg = ""
+            multi_links = []
+            if isinstance(link, dict):
+                for service, result in link.items():
+                    if "error" in result:
+                        multi_link_msg += (
+                            f"{service.capitalize()}: Error - {result['error']}\n"
+                        )
+                    elif result.get("link"):
+                        multi_links.append(
+                            (f"{service.capitalize()} Link", result["link"])
+                        )
+                multi_link_msg = multi_link_msg.strip()
+                link = None
+
+            if (
+                link
+                or rclone_path
+                and Config.RCLONE_SERVE_URL
+                and not self.private_link
+                or multi_links
+            ):
+                buttons = ButtonMaker()
+                show_drive_link = Config.SHOW_CLOUD_LINK and (
+                    not Config.DISABLE_DRIVE_LINK or self.user_id == Config.OWNER_ID
+                )
+                if link and show_drive_link:
+                    buttons.url_button("☁️ Cloud Link", link)
+                elif multi_links:
+                    for name, url in multi_links:
+                        buttons.url_button(name, url)
+                else:
+                    msg += f"\n\nPath: <code>{rclone_path}</code>"
+                if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
+                    remote, rpath = rclone_path.split(":", 1)
+                    url_path = rutils.quote(f"{rpath}")
+                    share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
+                    if mime_type == "Folder":
+                        share_url += "/"
+                    buttons.url_button("🔗 Rclone Link", share_url)
+                if not rclone_path and dir_id:
+                    INDEX_URL = ""
+                    if self.private_link:
+                        INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
+                    elif Config.INDEX_URL:
+                        INDEX_URL = Config.INDEX_URL
+                    if INDEX_URL and self.name:
+                        safe_name = rutils.quote(self.name.strip("/"))
+                        share_url = f"{INDEX_URL}/{safe_name}"
+                        if mime_type == "Folder":
+                            share_url += "/"
+                        buttons.url_button("⚡ Index Link", share_url)
+                        if mime_type.startswith(("image", "video", "audio")):
+                            share_urls = f"{share_url}?a=view"
+                            buttons.url_button("🌐 View Link", share_urls)
+
+                if Config.SAVE_MSG:
+                    save_target = "pm"
+                    if self.user_dict.get("SAVE_MODE", False) and self.user_dict.get("LDUMP"):
+                        ldumps = self.user_dict.get("LDUMP") or {}
+                        for value in ldumps.values():
+                            candidate = f"save {value}".encode("utf-8")
+                            if len(candidate) <= 64:
+                                save_target = value
+                                break
+                    buttons.data_button("💾 Save", f"save {save_target}")
+
+                if Config.SOURCE_LINK and self.source_url:
+                    buttons.url_button("🔗 Source", self.source_url)
+
+                if Config.SHOW_MEDIAINFO and mime_type and mime_type != 0:
+                    if mime_type.startswith(("video", "audio")):
+                        buttons.data_button("🎬 MediaInfo", f"mediainfo {self.mid}")
+
+                button = buttons.build_menu(2)
+            else:
+                if not multi_link_msg:
+                    msg += f"\n\n • Path: <code>{rclone_path}</code>"
+                button = None
+            msg += f"\n\n • <b>Task By:</b> {self.tag}\n\n"
+            group_msg = (
+                msg + "✦ <b><u>Action Performed :</u></b>\n"
+                "➜ <i>Cloud link(s) have been sent to User PM</i>\n\n"
+            )
+
+            if multi_link_msg:
+                group_msg += multi_link_msg + "\n"
+                msg += multi_link_msg + "\n"
+
+            if self.bot_pm and self.is_super_chat:
+                await send_message(self.user_id, msg, button, photo=task_done_photo)
+
+            if hasattr(Config, "MIRROR_LOG_ID") and Config.MIRROR_LOG_ID:
+                await send_message(Config.MIRROR_LOG_ID, msg, button)
+
+            await send_message(self.message, group_msg, button, photo=task_done_photo)
+
+        await self._send_mega_skipped_breakdown()
+
+        if self.seed:
+            await clean_target(self.up_dir)
+            async with queue_dict_lock:
+                if self.mid in non_queued_up:
+                    non_queued_up.remove(self.mid)
+            await start_from_queued()
+            return
+
+        await clean_download(self.dir)
         async with task_dict_lock:
             if self.mid in task_dict:
                 del task_dict[self.mid]
@@ -810,50 +973,12 @@ class TaskListener(TaskConfig):
         await database.remove_shared_task(
             self.mid, TgClient.ID, user_id=self.user_id
         )
-        await self.remove_from_same_dir()
-
-        error_str = str(error)
-        friendly_error = self._beautify_error(error_str)
-        
-        msg = (
-            f"""<i><b>Limit Breached!</b></i>
- • <b>Task Size:</b> {get_readable_file_size(self.size)}
- • <b>Mode:</b> {self.mode[0]} - {self.mode[1]}
-
-{error}"""
-            if is_limit
-            else f"""<i><b>Download Stopped!</b></i>
-• <b>Task for:</b> {self.tag}
-
-• <b>Due To:</b> {escape(friendly_error)}
-• <b>Mode:</b> {self.mode[0]} - {self.mode[1]}
-• <b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}"""
-        )
-
-        await send_message(self.message, msg, button, photo=task_failed_photo)
-        await self._send_mega_skipped_breakdown()
-
         if count == 0:
             await self.clean()
         else:
             await update_status_message(self.message.chat.id)
 
-        if (
-            self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
-            and Config.DATABASE_URL
-        ):
-            await database.rm_complete_task(self.message.link)
-
         async with queue_dict_lock:
-            if self.mid in queued_dl:
-                queued_dl[self.mid].set()
-                del queued_dl[self.mid]
-            if self.mid in queued_up:
-                queued_up[self.mid].set()
-                del queued_up[self.mid]
-            if self.mid in non_queued_dl:
-                non_queued_dl.remove(self.mid)
             if self.mid in non_queued_up:
                 non_queued_up.remove(self.mid)
 
