@@ -619,6 +619,7 @@ class TaskListener(TaskConfig):
     async def on_upload_complete(
         self, link, files, folders, mime_type, rclone_path="", dir_id=""
     ):
+        task_done_photo = choice(glob("bot/images/task_done/*"))
         if (
             self.is_super_chat
             and Config.INCOMPLETE_TASK_NOTIFIER
@@ -641,7 +642,7 @@ class TaskListener(TaskConfig):
             msg += BotTheme("L_CC", Tag=self.tag)
 
             if not files and not self.is_super_chat:
-                await send_message(self.message, msg)
+                await send_message(self.message, msg, photo=task_done_photo)
             else:
                 msg += "✦ <b><u>Files List :</u></b>\n"
                 fmsg = ""
@@ -651,22 +652,22 @@ class TaskListener(TaskConfig):
                     fmsg += "\n"
                     if len(fmsg.encode() + msg.encode()) > 4000:
                         if not (self.bot_pm and self.is_super_chat):
-                            await send_message(self.user_id, msg + fmsg)
+                            await send_message(self.user_id, msg + fmsg, photo=task_done_photo)
                         if self.is_super_chat:
                             group_msg = msg + fmsg
                             if self.bot_pm:
                                 group_msg = group_msg.replace("✦ <b><u>Files List :</u></b>\n", "✦ <b><u>Action Performed :</u></b>\n➜ <i>File(s) have been Sent to Bot PM (Private)</i>\n\n✦ <b><u>Files List :</u></b>\n")
-                            await send_message(self.message, group_msg)
+                            await send_message(self.message, group_msg, photo=task_done_photo)
                         await sleep(1)
                         fmsg = ""
                 if fmsg != "":
                     if not (self.bot_pm and self.is_super_chat):
-                        await send_message(self.user_id, msg + fmsg)
+                        await send_message(self.user_id, msg + fmsg, photo=task_done_photo)
                     if self.is_super_chat:
                         group_msg = msg + fmsg
                         if self.bot_pm:
                             group_msg = group_msg.replace("✦ <b><u>Files List :</u></b>\n", "✦ <b><u>Action Performed :</u></b>\n➜ <i>File(s) have been Sent to Bot PM (Private)</i>\n\n✦ <b><u>Files List :</u></b>\n")
-                        await send_message(self.message, group_msg)
+                        await send_message(self.message, group_msg, photo=task_done_photo)
         else:
             msg += BotTheme("M_TYPE", Mimetype=mime_type)
             if mime_type == "Folder":
@@ -763,12 +764,12 @@ class TaskListener(TaskConfig):
                 msg += multi_link_msg + "\n"
 
             if self.bot_pm and self.is_super_chat:
-                await send_message(self.user_id, msg, button)
+                await send_message(self.user_id, msg, button, photo=task_done_photo)
 
             if hasattr(Config, "MIRROR_LOG_ID") and Config.MIRROR_LOG_ID:
                 await send_message(Config.MIRROR_LOG_ID, msg, button)
 
-            await send_message(self.message, group_msg, button)
+            await send_message(self.message, group_msg, button, photo=task_done_photo)
 
         await self._send_mega_skipped_breakdown()
 
@@ -778,6 +779,27 @@ class TaskListener(TaskConfig):
                 if self.mid in non_queued_up:
                     non_queued_up.remove(self.mid)
             await start_from_queued()
+            return
+
+        await clean_download(self.dir)
+        async with task_dict_lock:
+            if self.mid in task_dict:
+                del task_dict[self.mid]
+            count = len(task_dict)
+        await database.remove_shared_task(
+            self.mid, TgClient.ID, user_id=self.user_id
+        )
+        if count == 0:
+            await self.clean()
+        else:
+            await update_status_message(self.message.chat.id)
+
+        async with queue_dict_lock:
+            if self.mid in non_queued_up:
+                non_queued_up.remove(self.mid)
+
+        await start_from_queued()
+
             return
 
 
