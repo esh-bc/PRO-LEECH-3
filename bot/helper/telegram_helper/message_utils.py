@@ -148,6 +148,11 @@ async def edit_message(message, text, buttons=None, block=True, _recursion_depth
         )
     except (MessageNotModified, MessageEmpty):
         pass
+    except MediaCaptionTooLong:
+        if _recursion_depth >= 3:
+            LOGGER.error("edit_message: MediaCaptionTooLong max retry depth reached")
+            return
+        return await edit_message(message, text[:1024], buttons, block, _recursion_depth + 1)
     except (ReplyMarkupInvalid, ButtonUrlInvalid, ButtonDataInvalid) as rmi:
         LOGGER.warning(f"Invalid reply markup on edit, retrying without buttons: {rmi}")
         if _recursion_depth >= 3:
